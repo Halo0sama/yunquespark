@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# 云雀灵感闪现 · 控制台 CLI
+# 用法: yq <命令> [参数]    （设备默认 emulator-5554，可用 YQ_SERIAL 覆盖）
+set -euo pipefail
+
+SERIAL="${YQ_SERIAL:-emulator-5554}"
+PORT="${YQ_PORT:-8721}"
+ADB="$(command -v adb || echo /Users/halo/Library/Android/sdk/platform-tools/adb)"
+APP="com.halo.yunquespark"
+ACTIVITY="$APP/.MainActivity"
+
+forward() {
+  [ -n "$($ADB devices | grep -w "$SERIAL" | grep -w device || true)" ] || { echo "错误: 设备 $SERIAL 未连接" >&2; exit 2; }
+  $ADB -s "$SERIAL" forward "tcp:$PORT" "tcp:$PORT" >/dev/null
+}
+
+api() { # api METHOD PATH [JSON]
+  forward
+  local m="$1" p="$2" d="${3:-}"
+  if [ -n "$d" ]; then
+    curl -s -m 650 -X "$m" -H 'Content-Type: application/json' -d "$d" "http://127.0.0.1:$PORT$p"
+  else
+    curl -s -m 650 -X "$m" "http://127.0.0.1:$PORT$p"
+  fi
+}
+
+launch() { $ADB -s "$SERIAL" shell am force-stop $APP; sleep 1; $ADB -s "$SERIAL" shell am start -n "$ACTIVITY" >/dev/null; sleep 4; }
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  launch)   launch; api GET /health ;;
+  health)   api GET /health ;;
+  stats)    api GET /stats ;;
+  tasks)    api GET /tasks ;;
+  cards)    api GET "/cards?n=${1:-7}" ;;
+  note)     api GET "/note?id=$1" ;;
+  kb)       if [ $# -ge 1 ]; then api GET "/kb?slug=$1"; else api GET /kb; fi ;;
+  run)      api POST "/tasks/$1/run" '{}' ; echo ;;
+  pipeline) api POST "/tasks/pipeline/run" "${1:-{\}}"; echo ;;
+  wait)     api GET "/task/$1/wait?ms=${2:-120000}" ; echo ;;
+  cancel)   api POST "/tasks/$1/cancel" '{}' ; echo ;;
+  sync)     api POST /sync/cloud '{}' ; echo ;;
+  obsidian) api POST /sync/obsidian '{}' ; echo ;;
+  cookie)   # 从文件或 stdin 读 Cookie：yq cookie [file]
+            RAW="$(cat "${1:-/dev/stdin}")"
+            JSON="$(python3 -c "import json,sys;print(json.dumps({'cookie': sys.stdin.read()}))" <<< "$RAW")"
+            api POST /login/cookie "$JSON"; echo ;;
+  login)    # yq login <account> <password>  无头登录（最长100s；短信验证阶段可长达8分钟）
+            JSON="$(python3 -c "import json,sys;print(json.dumps({'account':sys.argv[1],'password':sys.argv[2]}))" "$1" "$2")"
+            api POST /login/account "$JSON"; echo ;;
+  otp)      # yq otp <短信验证码>   登录等待验证码时注入
+            JSON="$(python3 -c "import json,sys;print(json.dumps({'code':sys.argv[1]}))" "$1")"
+            api POST /login/otp "$JSON"; echo ;;
+  state)    api GET /health | python3 -c "import json,sys;d=json.load(sys.stdin);print(d.get('loginState','?'))" 2>/dev/null || api GET /health ;;
+  refresh)  # refresh：电脑无头Edge刷新Cookie→注入设备（依赖既有 profile）
+            pkill -f "minote-sync-external/browser-profile" 2>/dev/null || true; sleep 1
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" \
+              --headless=new --remote-debugging-port=9333 \
+              --user-data-dir="$HOME/.minote-sync-external/browser-profile" \
+              --no-first-run --no-default-browser-check \
+              'https://i.mi.com/note' >/dev/null 2>&1 &
+            sleep 9
+            COOKIE="$(node /tmp/grab_cookie.mjs 2>/dev/null | tail -1)" || true
+            pkill -f "minote-sync-external/browser-profile" 2>/dev/null || true
+            if [ "${#COOKIE}" -lt 300 ]; then echo "刷新失败：浏览器登录态可能已过期（需手动扫码一次）" >&2; exit 1; fi
+            echo "$COOKIE" > /tmp/minote_cookie.txt
+            echo "新 Cookie 已获取（${#COOKIE} 字符），注入 $SERIAL …"
+            launch >/dev/null
+            RAW="$COOKIE" "$0" cookie /tmp/minote_cookie.txt >/dev/null
+            api POST /sync/cloud '{}' ; echo ;;
+  help|*)
+    cat <<'USAGE'
+云雀灵感闪现 CLI（yq）
+  launch            重启 app 并显示状态
+  health            存活检查
+  stats             库统计（笔记/分类/知识库/草稿/卡片）
+  tasks             任务状态
+  run <id>          启动任务  id: classify|consolidate|kb|expand|card
+  pipeline [json]   启动顺序流水线（默认 {"ids":"classify,consolidate,kb,expand"}）
+  wait <id> [ms]    等待任务结束（默认120s）
+  cancel <id>       停止任务
+  sync              云端增量同步（自动续期+自动整理）
+  obsidian          同步到 Obsidian vault
+  cookie <file>     注入 Cookie（文件或 stdin）
+  login <账号> <密码>  无头账号登录
+  refresh           电脑无头刷新Cookie→注入→同步（一键续期）
+  cards [n]         最近卡片
+  note <id>         读笔记全文
+  kb [slug]         知识库页面/目录
+环境: YQ_SERIAL=设备序列号  YQ_PORT=端口(默认8721)
+USAGE
+    ;;
+esac
