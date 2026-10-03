@@ -549,9 +549,9 @@ private fun WebViewLogin(onDone: (String) -> Unit) {
                 update = { w -> if (reload > 0) w.reload() },
             )
             if (progress < 100 && err.isBlank()) {
-                LinearProgressIndicator(
+                LinearWavyProgressIndicator(
                     progress = { progress / 100f },
-                    modifier = Modifier.fillMaxWidth().height(3.dp).align(Alignment.TopCenter),
+                    modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
                 )
             }
         }

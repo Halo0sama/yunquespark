@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.halo.yunquespark
 
 import android.content.Intent
@@ -98,7 +100,8 @@ class MainActivity : ComponentActivity() {
                             verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
                             horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
                         ) {
-                            CircularProgressIndicator()
+                            // M3 Expressive：多边形形变加载指示器
+                            LoadingIndicator()
                             androidx.compose.foundation.layout.Spacer(Modifier.padding(12.dp))
                             androidx.compose.material3.Text(importMsg)
                         }

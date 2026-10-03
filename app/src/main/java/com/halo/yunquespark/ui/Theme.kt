@@ -1,7 +1,8 @@
 package com.halo.yunquespark.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -101,10 +102,13 @@ private val AppTypography = Typography(
     labelSmall = TextStyle(fontSize = 11.sp, lineHeight = 15.sp),
 )
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun YunqueTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
-    MaterialTheme(
+    // Material 3 Expressive：Expressive 动效（spring 形变、形状呼吸）+ Expressive 形状令牌，
+    // 配色保留云雀青蓝品牌方案
+    MaterialExpressiveTheme(
         colorScheme = if (dark) DarkColors else LightColors,
         typography = AppTypography,
         content = content,

@@ -65,7 +65,7 @@ fun TasksScreen() {
                     Text(spec.desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (t != null && t.total > 0) {
                         Spacer(Modifier.height(8.dp))
-                        LinearProgressIndicator(
+                        LinearWavyProgressIndicator(
                             progress = { if (t.total == 0) 0f else (t.progress.toFloat() / t.total).coerceIn(0f, 1f) },
                             modifier = Modifier.fillMaxWidth(),
                         )
